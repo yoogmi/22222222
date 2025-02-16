@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>반짝이는 테트리스</title>
+    <style>
+        body {
+            text-align: center;
+            background-color: #222;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            margin-bottom: 5px;
+        }
+        #game-container {
+            display: inline-block;
+            background-color: #333;
+        }
+        @keyframes glow {
+            0% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(255, 255, 255, 1); }
+            100% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
+        }
+    </style>
+</head>
+<body>
+    <h1>반짝이는 테트리스</h1>
+    <canvas id="game-container" width="300" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById("game-container");
+        const ctx = canvas.getContext("2d");
+
+        const COLS = 10, ROWS = 20, BLOCK_SIZE = 30;
+        let board = Array.from({ length: ROWS }, () => Array(COLS).fill(""));
+
+        const SHAPES = {
+            I: [[1,0], [1,1], [1,2], [1,3]],
+            O: [[0,0], [0,1], [1,0], [1,1]],
+            T: [[0,1], [1,0], [1,1], [1,2]],
+            S: [[0,1], [0,2], [1,0], [1,1]],
+            Z: [[0,0], [0,1], [1,1], [1,2]],
+            J: [[0,0], [1,0], [1,1], [1,2]],
+            L: [[0,2], [1,0], [1,1], [1,2]]
+        };
+
+        const COLORS = { 
+            I: "#00ffff", O: "#ffff00", T: "#800080", 
+            S: "#00ff00", Z: "#ff0000", J: "#0000ff", L: "#ff9900" 
+        };
+
+        class Piece {
+            constructor(type) {
+                this.type = type;
+                this.color = COLORS[type];
+                this.shape = SHAPES[type];
+                this.x = 3;
+                this.y = -2;
+                this.glowIntensity = 0;
+                this.glowDirection = 1;
+            }
+
+            draw() {
+                this.shape.forEach(([r, c]) => {
+                    if (this.y + r >= 0) {
+                        drawGlowingBlock(this.x + c, this.y + r, this.color, this.glowIntensity);
+                    }
+                });
+
+                // 반짝임 효과 업데이트
+                this.glowIntensity += this.glowDirection * 0.1;
+                if (this.glowIntensity > 1 || this.glowIntensity < 0) {
+                    this.glowDirection *= -1;
+                }
+            }
+
+            erase() {
+                this.shape.forEach(([r, c]) => {
+                    if (this.y + r >= 0) drawBlock(this.x + c, this.y + r, "#333");
+                });
+            }
+
+            moveDown() {
+                if (!this.collision(0, 1)) {
+                    this.erase();
+                    this.y++;
+                    this.draw();
+                } else {
+                    this.lock();
+                    currentPiece = newPiece();
+                }
+            }
+
+            moveLeft() {
+                if (!this.collision(-1, 0)) {
+                    this.erase();
+                    this.x--;
+                    this.draw();
+                }
+            }
+
+            moveRight() {
+                if (!this.collision(1, 0)) {
+                    this.erase();
+                    this.x++;
+                    this.draw();
+                }
+            }
+
+            rotate() {
+                let newShape = this.shape.map(([r, c]) => [-c, r]);
+                if (!this.collision(0, 0, newShape)) {
+                    this.erase();
+                    this.shape = newShape;
+                    this.draw();
+                }
+            }
+
+            hardDrop() {
+                this.erase();
+                while (!this.collision(0, 1)) this.y++;
+                this.draw();
+                this.lock();
+                currentPiece = newPiece();
+            }
+
+            collision(dx, dy, newShape = this.shape) {
+                return newShape.some(([r, c]) => {
+                    let newX = this.x + c + dx, newY = this.y + r + dy;
+                    return newX < 0 || newX >= COLS || newY >= ROWS || (newY >= 0 && board[newY][newX]);
+                });
+            }
+
+            lock() {
+                this.shape.forEach(([r, c]) => {
+                    let newY = this.y + r, newX = this.x + c;
+                    if (newY >= 0) board[newY][newX] = this.color;
+                });
+
+                if (this.y < 0) {
+                    alert("게임 오버!");
+                    location.reload();
+                }
+            }
+        }
+
+        function newPiece() {
+            let keys = Object.keys(SHAPES);
+            return new Piece(keys[Math.floor(Math.random() * keys.length)]);
+        }
+
+        function drawBlock(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+            ctx.strokeStyle = "#111";
+            ctx.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+        }
+
+        function drawGlowingBlock(x, y, color, intensity) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+            
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 10 + intensity * 20;
+            ctx.strokeStyle = `rgba(255,255,255, ${0.5 + intensity * 0.5})`;
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+
+            ctx.shadowBlur = 0;
+        }
+
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            board.forEach((row, r) => row.forEach((color, c) => color && drawBlock(c, r, color)));
+        }
+
+        let currentPiece = newPiece();
+
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "ArrowLeft") currentPiece.moveLeft();
+            else if (e.key === "ArrowRight") currentPiece.moveRight();
+            else if (e.key === "ArrowUp") currentPiece.rotate();
+            else if (e.key === "ArrowDown") currentPiece.moveDown();
+            else if (e.key === " ") currentPiece.hardDrop();
+        });
+
+        function gameLoop() {
+            currentPiece.moveDown();
+            drawBoard();
+            currentPiece.draw();
+            setTimeout(gameLoop, 500);
+        }
+        gameLoop();
+    </script>
+</body>
+</html>
